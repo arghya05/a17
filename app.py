@@ -1,8 +1,8 @@
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 import gradio as gr
-import os
-import gc
+import base64
+from io import BytesIO
 
 # Define style names
 style_names = [
@@ -13,220 +13,180 @@ style_names = [
     "Sketch"
 ]
 
-# Define color loss functions
-def yellow_loss(image, strength=0.8):
-    """Reduces yellow colors in the generated images."""
-    # Convert PIL image to numpy array
-    img_array = np.array(image).astype(np.float32) / 255.0
+def create_watercolor_demo():
+    """Create a watercolor-style landscape"""
+    img = Image.new('RGB', (200, 200), (173, 216, 230))  # Light blue sky
+    draw = ImageDraw.Draw(img)
     
-    # Extract RGB channels
-    r = img_array[:, :, 0]
-    g = img_array[:, :, 1]
-    b = img_array[:, :, 2]
+    # Mountains with yellow highlights
+    draw.polygon([(0, 100), (80, 40), (160, 90), (200, 60), (200, 200), (0, 200)], 
+                fill=(100, 120, 110))  # Mountain base
+    draw.polygon([(20, 80), (60, 50), (100, 75)], 
+                fill=(255, 255, 0))  # Yellow mountain highlight
     
-    # Define yellow as high red and green, low blue
-    yellow_mask = ((r > 0.5) & (g > 0.5) & (b < 0.4))
+    # Yellow sun
+    draw.ellipse([(150, 20), (190, 60)], fill=(255, 255, 0))
     
-    # Transform yellow areas toward blue/purple
-    r[yellow_mask] = r[yellow_mask] * (1 - strength * 0.7)  # Reduce red somewhat
-    g[yellow_mask] = g[yellow_mask] * (1 - strength)        # Reduce green more
-    b[yellow_mask] = b[yellow_mask] + (1 - b[yellow_mask]) * strength  # Increase blue
-    
-    # Update the image
-    img_array[:, :, 0] = r
-    img_array[:, :, 1] = g
-    img_array[:, :, 2] = b
-    
-    # Convert back to PIL image
-    return Image.fromarray((img_array * 255).astype(np.uint8))
+    return img
 
-def cyan_loss(image, strength=0.8):
-    """Reduces cyan colors in the generated images."""
-    # Convert PIL image to numpy array
-    img_array = np.array(image).astype(np.float32) / 255.0
+def create_cyberpunk_demo():
+    """Create a cyberpunk city scene"""
+    img = Image.new('RGB', (200, 200), (0, 0, 40))  # Dark blue night sky
+    draw = ImageDraw.Draw(img)
     
-    # Extract RGB channels
-    r = img_array[:, :, 0]
-    g = img_array[:, :, 1]
-    b = img_array[:, :, 2]
+    # Buildings with yellow neon
+    for x in range(0, 200, 40):
+        height = np.random.randint(80, 180)
+        draw.rectangle([(x, height), (x+30, 200)], fill=(40, 40, 60))
+        # Yellow neon signs
+        draw.rectangle([(x+5, height+20), (x+25, height+30)], fill=(255, 255, 0))
     
-    # Define cyan as low red, high green and blue
-    cyan_mask = ((r < 0.4) & (g > 0.5) & (b > 0.5))
-    
-    # Transform cyan areas toward red/orange
-    r[cyan_mask] = r[cyan_mask] + (1 - r[cyan_mask]) * strength
-    g[cyan_mask] = g[cyan_mask] * (1 - strength * 0.7)
-    b[cyan_mask] = b[cyan_mask] * (1 - strength * 0.7)
-    
-    # Update the image
-    img_array[:, :, 0] = r
-    img_array[:, :, 1] = g
-    img_array[:, :, 2] = b
-    
-    # Convert back to PIL image
-    return Image.fromarray((img_array * 255).astype(np.uint8))
+    return img
 
-def magenta_loss(image, strength=0.8):
-    """Reduces magenta colors in the generated images."""
-    # Convert PIL image to numpy array
-    img_array = np.array(image).astype(np.float32) / 255.0
+def create_anime_demo():
+    """Create an anime-style character"""
+    img = Image.new('RGB', (200, 200), (255, 182, 193))  # Pink background
+    draw = ImageDraw.Draw(img)
     
-    # Extract RGB channels
-    r = img_array[:, :, 0]
-    g = img_array[:, :, 1]
-    b = img_array[:, :, 2]
+    # Stylized character with yellow elements
+    # Hair
+    draw.ellipse([(50, 30), (150, 130)], fill=(255, 255, 0))  # Yellow hair
+    # Face
+    draw.ellipse([(70, 50), (130, 110)], fill=(255, 220, 200))
     
-    # Define magenta as high red and blue, low green
-    magenta_mask = ((r > 0.5) & (g < 0.4) & (b > 0.5))
-    
-    # Transform magenta areas toward green
-    r[magenta_mask] = r[magenta_mask] * (1 - strength)
-    g[magenta_mask] = g[magenta_mask] + (1 - g[magenta_mask]) * strength
-    b[magenta_mask] = b[magenta_mask] * (1 - strength)
-    
-    # Update the image
-    img_array[:, :, 0] = r
-    img_array[:, :, 1] = g
-    img_array[:, :, 2] = b
-    
-    # Convert back to PIL image
-    return Image.fromarray((img_array * 255).astype(np.uint8))
+    return img
 
-# Color loss functions dictionary
-color_loss_functions = {
-    "None": lambda img, s: img,
-    "Yellow Loss": yellow_loss,
-    "Cyan Loss": cyan_loss,
-    "Magenta Loss": magenta_loss
+def create_oil_painting_demo():
+    """Create an oil painting style still life"""
+    img = Image.new('RGB', (200, 200), (139, 69, 19))  # Brown background
+    draw = ImageDraw.Draw(img)
+    
+    # Yellow vase
+    draw.ellipse([(60, 60), (140, 160)], fill=(255, 255, 0))
+    # Yellow flowers
+    for i in range(3):
+        x = 70 + i * 30
+        draw.ellipse([(x, 40), (x+20, 60)], fill=(255, 255, 0))
+    
+    return img
+
+def create_sketch_demo():
+    """Create a sketch-style drawing"""
+    img = Image.new('RGB', (200, 200), (255, 255, 255))  # White background
+    draw = ImageDraw.Draw(img)
+    
+    # Sketch lines in dark gray
+    draw.line([(50, 50), (150, 50)], fill=(100, 100, 100), width=2)
+    # Yellow highlighting
+    draw.rectangle([(60, 60), (140, 140)], fill=(255, 255, 0), outline=(100, 100, 100))
+    
+    return img
+
+# Style to function mapping
+style_creators = {
+    "Watercolor": create_watercolor_demo,
+    "Cyberpunk": create_cyberpunk_demo,
+    "Anime": create_anime_demo,
+    "Oil Painting": create_oil_painting_demo,
+    "Sketch": create_sketch_demo
 }
 
-# Function to generate images
-def generate_image(prompt, style, color_loss_type, seed, strength, image_input=None):
-    # For demo purposes, we'll use a placeholder image if no diffusers
-    if image_input is None:
-        # Create a simple colored image as placeholder
-        if style == "Watercolor":
-            color = (173, 216, 230)  # Light blue
-        elif style == "Cyberpunk":
-            color = (255, 105, 180)  # Hot pink
-        elif style == "Anime":
-            color = (255, 165, 0)    # Orange
-        elif style == "Oil Painting":
-            color = (139, 69, 19)    # Saddle brown
-        else:  # Sketch
-            color = (169, 169, 169)  # Dark gray
-            
-        # Create a gradient image
-        width, height = 512, 512
-        image = Image.new('RGB', (width, height), color)
+# Define color loss function
+def yellow_loss(image, strength=0.8):
+    """Reduces yellow colors in the image."""
+    try:
+        # Convert to numpy array
+        img_array = np.array(image).astype(np.float32) / 255.0
         
-        # Add some text to show the prompt
-        try:
-            from PIL import ImageDraw, ImageFont
-            draw = ImageDraw.Draw(image)
-            try:
-                # Try several common fonts
-                for font_name in ["arial.ttf", "Arial.ttf", "DejaVuSans.ttf", "FreeSans.ttf"]:
-                    try:
-                        font = ImageFont.truetype(font_name, 20)
-                        break
-                    except:
-                        continue
-                else:  # If no font was found
-                    font = ImageFont.load_default()
-            except:
-                font = ImageFont.load_default()
+        # Extract RGB channels
+        r, g, b = img_array[:, :, 0], img_array[:, :, 1], img_array[:, :, 2]
+        
+        # Define yellow as high red and green, low blue
+        yellow_mask = np.logical_and(np.logical_and(r > 0.5, g > 0.5), b < 0.4)
+        
+        # Apply transformation
+        if np.any(yellow_mask):
+            r[yellow_mask] *= (1 - strength * 0.7)
+            g[yellow_mask] *= (1 - strength)
+            b[yellow_mask] += (1 - b[yellow_mask]) * strength
             
-            # Wrap text
-            words = prompt.split()
-            lines = []
-            current_line = []
-            for word in words:
-                if len(' '.join(current_line + [word])) <= 40:
-                    current_line.append(word)
-                else:
-                    lines.append(' '.join(current_line))
-                    current_line = [word]
-            if current_line:
-                lines.append(' '.join(current_line))
-            
-            text = '\n'.join(lines)
-            
-            # Add style info
-            text += f"\n\nStyle: {style}"
-            if seed >= 0:
-                text += f"\nSeed: {seed}"
-            
-            # Draw text with outline for better visibility
-            x, y = 20, 20
-            # Draw outline
-            for offset_x, offset_y in [(-1,-1), (-1,1), (1,-1), (1,1)]:
-                draw.multiline_text((x+offset_x, y+offset_y), text, fill=(0,0,0), font=font)
-            # Draw text
-            draw.multiline_text((x, y), text, fill=(255,255,255), font=font)
-            
-        except Exception as e:
-            print(f"Error adding text to image: {e}")
-    else:
-        image = image_input
-    
-    # Apply color loss if selected
-    if color_loss_type != "None" and color_loss_functions[color_loss_type] is not None:
-        try:
-            print(f"Applying {color_loss_type}...")
-            image = color_loss_functions[color_loss_type](image, strength)
-        except Exception as e:
-            print(f"Error applying color loss: {e}")
-            # Return original image if color loss fails
-    
-    return image, seed if seed >= 0 else 42
+            # Update the image array
+            img_array[:, :, 0] = r
+            img_array[:, :, 1] = g
+            img_array[:, :, 2] = b
+        
+        # Convert back to PIL image
+        return Image.fromarray((img_array * 255).astype(np.uint8))
+    except Exception as e:
+        print(f"Error in yellow_loss: {e}")
+        # Return original image if processing fails
+        return image
 
-# Create Gradio interface
-def create_interface():
-    with gr.Blocks(title="Color Loss Demo") as demo:
-        gr.Markdown("# Color Loss Demo")
-        gr.Markdown("This demo shows how different color loss functions can modify images.")
+# Function to apply color loss
+def apply_color_loss(style, strength, image_input=None):
+    """Apply yellow loss to an image."""
+    try:
+        # If user uploaded an image, use it
+        if image_input is not None:
+            # Resize to reasonable dimensions for speed
+            try:
+                # Handle different input types
+                if isinstance(image_input, np.ndarray):
+                    image = Image.fromarray(image_input)
+                else:
+                    image = image_input
+                
+                # Resize for speed but keep aspect ratio
+                image.thumbnail((300, 300), Image.LANCZOS)
+            except Exception as e:
+                print(f"Error processing input image: {e}")
+                # Use demo image as fallback
+                image = style_creators[style]()
+        else:
+            # Create a styled demo image
+            image = style_creators[style]()
         
-        with gr.Row():
-            with gr.Column():
-                prompt = gr.Textbox(label="Prompt", value="a serene landscape with mountains and a lake")
-                style = gr.Dropdown(label="Style", choices=style_names, value=style_names[0])
-                color_loss = gr.Dropdown(
-                    label="Color Loss Type", 
-                    choices=list(color_loss_functions.keys()), 
-                    value="None"
-                )
-                seed = gr.Number(label="Seed (use -1 for random)", value=42, precision=0)
-                strength = gr.Slider(label="Color Loss Strength", minimum=0.1, maximum=1.0, value=0.8, step=0.1)
-                image_input = gr.Image(label="Upload an image (optional)", type="pil")
-                generate_btn = gr.Button("Apply Color Loss")
-            
-            with gr.Column():
-                output_image = gr.Image(label="Result Image")
-                used_seed = gr.Number(label="Seed Used", precision=0)
+        # Apply yellow loss
+        result = yellow_loss(image, strength)
         
-        generate_btn.click(
-            fn=generate_image,
-            inputs=[prompt, style, color_loss, seed, strength, image_input],
-            outputs=[output_image, used_seed]
-        )
+        # Create a side-by-side comparison
+        comparison = Image.new('RGB', (image.width * 2 + 10, image.height), (240, 240, 240))
+        comparison.paste(image, (0, 0))
+        comparison.paste(result, (image.width + 10, 0))
         
-        gr.Markdown("## Examples")
-        gr.Examples(
-            examples=[
-                ["a serene landscape with mountains and a lake", "Watercolor", "None", 42, 0.8, None],
-                ["a serene landscape with mountains and a lake", "Cyberpunk", "Yellow Loss", 123, 0.8, None],
-                ["a serene landscape with mountains and a lake", "Anime", "Cyan Loss", 456, 0.8, None],
-                ["a futuristic cityscape at night", "Oil Painting", "Magenta Loss", 789, 0.8, None],
-                ["a portrait of a person", "Sketch", "Yellow Loss", 1024, 0.8, None],
-            ],
-            inputs=[prompt, style, color_loss, seed, strength, image_input],
-            outputs=[output_image, used_seed],
-        )
+        # Add labels
+        draw = ImageDraw.Draw(comparison)
+        draw.text((10, 10), f"Original ({style})", fill=(0, 0, 0))
+        draw.text((image.width + 20, 10), f"Yellow Loss: {strength:.1f}", fill=(0, 0, 0))
+        
+        return comparison
     
-    return demo
+    except Exception as e:
+        print(f"Error in apply_color_loss: {e}")
+        # Return a simple fallback image
+        return style_creators["Watercolor"]()
+
+# Create minimal Gradio interface
+demo = gr.Interface(
+    fn=apply_color_loss,
+    inputs=[
+        gr.Dropdown(choices=style_names, value=style_names[0], label="Style"),
+        gr.Slider(minimum=0.1, maximum=1.0, value=0.8, step=0.1, label="Yellow Loss Strength"),
+        gr.Image(label="Upload an image (optional)", type="pil")
+    ],
+    outputs=gr.Image(label="Result (Before and After)"),
+    title="Yellow Loss Demo",
+    description="This demo shows how yellow loss affects different artistic styles. Each style includes yellow elements that will be modified by the effect.",
+    examples=[
+        ["Watercolor", 0.8, None],
+        ["Cyberpunk", 0.5, None],
+        ["Anime", 0.9, None],
+        ["Oil Painting", 0.7, None],
+        ["Sketch", 0.6, None]
+    ],
+    cache_examples=True  # Cache examples for faster loading
+)
 
 # Launch the app
 if __name__ == "__main__":
-    demo = create_interface()
     demo.launch() 
